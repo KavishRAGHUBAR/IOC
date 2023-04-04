@@ -1,0 +1,129 @@
+IOC_T01
+M1 SESI
+Binôme : Kavish RAGHUBAR et Weiyi GONG
+
+<big>**1. Préambule**</big>
+
+
+<big>**2. Hello World! RaspberryPi**</big>
+
+
+<big>**1. Pourquoi passer par la redirection des ports ?** </big>
+
+&emsp;Nous avons une adresse IP unique et le routeur périphérique nous redirigera vers un des 7 Raspberry Pi (notament la 20 dans notre cas). Sans la redirection des ports, nous aurions eu besoin de 7 adresse IP.
+De plus, nous avons une facilité de communication entre le pc de la salle SESI et le Raspberry Pi.
+
+
+<big>**2. Pourquoi faut-il que vos fichiers soit dans un répertoire propre sur une RaspberryPi ?**</big>
+
+&emsp;Nous sommes plusieur à travailler sur la même raspberry Pi et donc avoir un répoire propre nous permettra d'éviter des conflits avec d'autre utilisateurs.
+
+
+
+<big>**3. Configuration des clés ssh**</big>
+
+
+
+&emsp;Afin de faire fonctionner le makefile, nous devons pour la première fois usitliser la commande : 
+
+gedit $HOME/.bashrc
+source /users/enseig/franck/IOC/export_rpi_toolchain.sh #on ajoute
+which bcm2708hardfp-gcc
+on remarque qu'on a pas bcm2708hardfp-gcc
+
+source $HOME/.bashrc
+
+En faisant : which bcm2708hardfp-gcc 
+On aura 
+/users/enseig/franck/IOC/arm-bcm2708hardfp-linux-gnueabi/bin/bcm2708hardfp-gcc
+
+Nous pouvons maintenant faire make pour cross-compiler le helloworld.c et générer l'exécutable sur le pc de la salle sesi pour le Raspberry Pi.
+
+
+<big>**4. Prise en mains des outils de développement: Hello World!**</big>
+
+
+&emsp;Concernant la cross-compilation, sur le pc de la salle SESI, nous allons générer le code binaire pour la plateforme du raspberry Pi sur lequel, le programme sera exécuter.
+Ensuite une fois le blink.x est generé, on le copie dans le dossier raghubar_gong sur le rpi, et avec "sudo ./blink", on peut exécuter le programme directement.
+
+
+
+
+<big>**5. Contrôle de GPIO en sortie**</big>
+
+
+&emsp;Afin de faire clignoter les 2 LEDs, nous avons écrit un programme en langage C qui gère 2 pthreads.
+Nous l'avons aussi fait en utilisant un fork().
+
+Fonctionnement de fork() :
+Les conditions if et else seront exécuter en même temps. Le if étant le père et le else le fils.
+
+Fonctionnement de pthread() : 
+En Linux, on peut créer un thread afin d'avoir 2 processus qui s'exécutent en même temps (en parallèle). De cette manière, les 2 Leds vont clignotter de manière indépendante. 
+Pour des raisons de stabilité du programme on pensera à faire un pthread_join() à la fin.
+
+<big>**5. Contrôle de GPIO en sortie**</big>
+<big>**1. Expliquez pourquoi, il pourrait être dangereux de se tromper de broche pour la configuration des GPIO.**</big>
+&emsp;Si nous avons Vdd sur une broche (qui est de vdd en sortie) et on met une tension 0 sur la même broche (qui est en sortie) nous aurons 0v et Vdd connectés et donc un court circuit qui endommagera le raspberry pi.
+
+<big>**2. A quoi correspond l'adresse BCM2835_GPIO_BASE ?**</big>
+&emsp;L'adresse BCM2835_GPIO_BASE est l'adresse qui correspond à la case mémoire du premier pin du registre GPIO.
+
+<big>**3. Que représente la structure struct gpio_s ?**</big>
+&emsp;struct gpio_s est une structure de données qui representera un pin du controleur GPIO. Cette structure sera utilisé par un driver pour configurer une broche en entrée ou sortie.
+
+<big>**4. Dans quel espace d'adressage est l'adresse gpio_regs_virt ?**</big>
+&emsp;La MMU du système va définir un espace d'adressage qui map l'adresse virtuelle du GPIO (du rpi) avec l'adresse physique. Donc le noyau pourra avoir accès au controleur GPIO en passant par l'adresse virtuelle (gpio_regs_virt) au lieu de passer par l'adresse physique.
+
+<big>**5. Dans la fonction gpio_fsel(), que contient la variable reg ?**</big>
+&emsp;Dans la fonction gpio_fsel() (function select), reg est le numéro de registre pour selectionner le mode de fonctionnement du pin. Chaque pin prend 3 bits sur ce registre.
+
+<big>**6. Dans la fonction gpio_write(), pourquoi écrire à deux adresses différentes en fonction de la valeur val ?**</big>
+&emsp;la fonction gpio_write() permet d'écrire un '0' ou '1' dans le pin passé en argument.
+   gpio_regs_virt->gpset[reg] = (1 << bit); //mettre le pin à 1
+   gpio_regs_virt->gpclr[reg] = (1 << bit); //mettre le pin à 0
+   
+<big>**7. Dans la fonction gpio_mmap(), à quoi correspondent les flags de open() ?**</big>
+&emsp;Dans la fonction gpio_mmap(), les flags open() nous diront si le fichier est ouvert en mode read et write, ou en mode o_sync qui synchronise en mémoire dès qu'on a une écriture, afin d'assurer qu'on ait les bonnes données sur disque avant de return.
+
+<big>**8. Dans la fonction gpio_mmap(), commentez les arguments de mmap().**</big>
+Les arguments sont :
+NULL // @ de base de la zone mémoire allouée (par le noyau)
+      , RPI_BLOCK_SIZE //taille mémoire à allouer
+      , PROT_READ | PROT_WRITE //protection lecture ou écriture
+      , MAP_SHARED //partage des données entre plusieurs processus
+      , mmap_fd //descripteur (en quel mode) le fichier est ouvert
+      , BCM2835_GPIO_BASE //Adresse de base pour mapper la mémoire physique(rpi) et la mémoire virtuelle(app en cours d'execution)
+
+<big>**9. Que fait la fonction delay() ?**</big>
+&emsp;delay() nous permet d'attendre une certaine durée définit dans fonction. Cette durée sera notre période de clignottement divisée par 2.
+    LED ON
+    delay()
+    LED OFF
+    delay()
+
+<big> **10. Pourquoi doit-on utiliser sudo ?**</big>
+&emsp;Sudo nous permet d'avoir les droits root pour exécuter une commande. Ainsi, le Raspberry Pi pourra lancer le fichier blink.x par exemple. Sans sudo, blink.x ne sera pas complètement fonctionnel.
+
+
+
+
+<big>**6. Contrôle de plusieurs GPIO en mode "sortie"**</big>
+
+&emsp;Pour contrôler deux GPIOs en sortie, on a utilisé deux pthread pour génerer les deux process, donc, on peut contrôler les deux leds séparément.
+
+
+
+<big>**7. Lecture de la valeur d'une entrée GPIO**</big>
+
+&emsp;On va ajouter un bouton, donc il faut séléctionner le type du GPIO correspond en mode entrée, après on écrit la fonction pour récuperer la valeur du bouton. Ensuite on a consulté la datasheet, on sait qu'on peut utiliser le registre, gplev pour avoir l'état du bouton. Comme on a vu dans gpio_write, on utilise un mask pour écrire la valeur, ici on utilise un mask pour récuperer la valeur. 
+ gpio_regs_virt->gplev[reg]>>bit & mask !=0;
+ 
+ Pour réaliser le fonctionnement du télérupteur, il faut comparer avec l'état précedent et l'état présent du bouton, si l'état précedent est 1 (bouton non appuiyé), l'état présent est 0(bouton appuiyé), donc c'est le moment du changement d'état, donc on peut lancer les instructions pour contrôler les leds.
+ 
+Nous avons crée un pthread pour le bouton comme on a fait pour les 2 LEDs.
+
+
+<big>**8. Pour les plus motivés**</big>
+
+&emsp;Afin de synchroniser les deux leds, on doit sychroniser le moment où on détecte un changement d'état. Tout d'abord on doit écrire les trois états pour led0, pour sychroniser les deux leds, on a ajouté une variable globale et ça change que dans une fonction, soit clign0 soit clign1, parce qu'il est globale. Pour le clignottement inversé, on a juste changé val de led0 à 1-val, cela réalisera le clignottement inverse par rapport à l'autre LED.
